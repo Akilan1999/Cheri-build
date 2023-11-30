@@ -327,7 +327,7 @@ class CheriBSDConfigTable:
     def get_target_configs(cls, xtarget: CrossCompileTarget) -> "list[CheriBSDConfig]":
         if xtarget.is_any_x86():
             return cls.X86_CONFIGS
-      elif xtarget.is_mips(include_purecap=False):
+        elif xtarget.is_mips(include_purecap=False):
             return cls.MIPS_CONFIGS
         elif xtarget.is_riscv(include_purecap=True):
             return RISCVKernelConfigFactory().make_all()
