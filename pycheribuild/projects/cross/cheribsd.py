@@ -56,7 +56,7 @@ from ..project import (
 )
 from ..simple_project import SimpleProject, TargetAliasWithDependencies, _clear_line_sequence, flush_stdio
 from ...config.compilation_targets import CompilationTargets, FreeBSDTargetInfo
-from ...config.loader import ConfigOptionBase
+from ...config.loader import ConfigOptionHandle
 from ...config.target_info import AutoVarInit, CrossCompileTarget
 from ...config.target_info import CompilerType as FreeBSDToolchainKind
 from ...processutils import latest_system_clang_tool, print_command
@@ -240,7 +240,6 @@ class RISCVKernelConfigFactory(KernelConfigFactory):
                 self.make_config({ConfigPlatform.QEMU}, kernel_abi, nocaprevoke=True, benchmark=True, mfsroot=True,
                                  default=True))
             configs.append(self.make_config({ConfigPlatform.GFE}, kernel_abi, nocaprevoke=True, mfsroot=True))
-            configs.append(self.make_config({ConfigPlatform.AWS}, kernel_abi, fett=True, nocaprevoke=True))
 
         return configs
 
@@ -277,8 +276,6 @@ class AArch64KernelConfigFactory(KernelConfigFactory):
                                             nocaprevoke=True))
             configs.append(self.make_config({ConfigPlatform.QEMU, ConfigPlatform.FVP}, kernel_abi, default=True,
                                             nocaprevoke=True, benchmark=True))
-            configs.append(self.make_config({ConfigPlatform.QEMU, ConfigPlatform.FVP}, kernel_abi, default=True,
-                                            nocaprevoke=True, mfsroot=True))
 
         return configs
 
@@ -351,8 +348,12 @@ class CheriBSDConfigTable:
         It is a fatal failure if 0 or more than one configurations exist.
         """
         configs = cls.get_configs(xtarget, platform=platform, kernel_abi=kernel_abi, default=True, **filter_kwargs)
-        assert len(configs) != 0, "No matching default kernel configuration"
-        assert len(configs) == 1, f"Too many default kernel configurations {configs}"
+        assert len(configs) != 0, f"No matching default kernel configuration for xtarget={xtarget}, " \
+                                  f"platform={platform.name}, kernel_abi={kernel_abi.name}, " \
+                                  f"filter_kwargs={filter_kwargs}"
+        assert len(configs) == 1, f"Too many default kernel configurations {configs} for xtarget={xtarget}, " \
+                                  f"platform={platform.name}, kernel_abi={kernel_abi.name}, " \
+                                  f"filter_kwargs={filter_kwargs}"
         return configs[0]
 
     @classmethod
@@ -1706,14 +1707,13 @@ class BuildCHERIBSD(BuildFreeBSD):
         kernel_abi = filter_kwargs.pop("kernel_abi", self.get_default_kernel_abi())
         if xtarget.is_riscv(include_purecap=True):
             filter_kwargs.setdefault("fett", self.build_fett_kernels)
-        filter_kwargs.setdefault("nocaprevoke", self.build_nocaprevoke_kernels)
         config = CheriBSDConfigTable.get_default(xtarget, platform, kernel_abi, **filter_kwargs)
         return config.kernconf
 
     def extra_kernel_configs(self) -> "list[CheriBSDConfig]":
         # Everything that is not the default kernconf
         option = inspect.getattr_static(self, "kernel_config")
-        assert isinstance(option, ConfigOptionBase)
+        assert isinstance(option, ConfigOptionHandle)
         if self.has_default_buildkernel_kernel_config and not option.is_default_value:
             return []
         configs = self._get_all_kernel_configs()
@@ -1842,7 +1842,6 @@ class BuildCheriBsdMfsKernel(BuildCHERIBSD):
         if platform is None:
             platform = self.get_default_kernel_platform()
         kernel_abi = filter_kwargs.pop("kernel_abi", self.get_default_kernel_abi())
-        filter_kwargs.setdefault("nocaprevoke", self.build_nocaprevoke_kernels)
         filter_kwargs["mfsroot"] = True
         config = CheriBSDConfigTable.get_default(self.crosscompile_target, platform, kernel_abi, **filter_kwargs)
         return config.kernconf
